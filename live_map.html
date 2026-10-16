@@ -169,11 +169,11 @@
 
 <div id="areaReport">
   <div class="ar-head">
-    <span class="ar-title">📐 Выделенная область</span>
-    <button id="arClose" title="Закрыть">✕</button>
+    <span class="ar-title">📐 Selected area</span>
+    <button id="arClose" title="Close">✕</button>
   </div>
   <div class="ar-body">
-    <div class="ar-row ar-total"><span>Всего работ</span><b id="arTotal">0</b></div>
+    <div class="ar-row ar-total"><span>Total jobs</span><b id="arTotal">0</b></div>
     <div class="ar-row"><span><i class="ar-dot booked"></i>Booked</span><b id="arBooked">0</b></div>
     <div class="ar-row ar-hoverable" id="arLostRow">
       <span><i class="ar-dot lost"></i>Lost</span><b id="arLost">0</b>
@@ -183,7 +183,7 @@
       <span><i class="ar-dot canceled"></i>Canceled</span><b id="arCanceled">0</b>
       <div class="ar-reasons" id="arCanceledReasons"></div>
     </div>
-    <div class="ar-hint">Рисуйте область кнопками ◻ / ⬠ слева. Наведите на Lost / Canceled — причины. «✕» очищает выделение.</div>
+    <div class="ar-hint">Draw an area with the ⬠ polygon tool on the left. Hover Lost / Canceled for reasons. «✕» clears the selection.</div>
   </div>
 </div>
 
@@ -252,8 +252,7 @@ const drawControl = new L.Control.Draw({
   position: 'topleft',
   draw: {
     polygon: { shapeOptions: { color:'#1a73e8', weight:2, fillOpacity:0.08 }, allowIntersection:false },
-    rectangle: { shapeOptions: { color:'#1a73e8', weight:2, fillOpacity:0.08 } },
-    polyline:false, circle:false, marker:false, circlemarker:false
+    rectangle:false, polyline:false, circle:false, marker:false, circlemarker:false
   },
   edit: { featureGroup: drawnItems, edit:false, remove:false }
 });
@@ -281,15 +280,15 @@ function pct(n, total){ return total>0 ? Math.round(n/total*100) : 0; }
 
 // build the reason-breakdown HTML for a given bucket of rows (by lose_reason)
 function reasonsHtml(rows, title){
-  if(!rows.length) return '<div class="rr-title">'+title+'</div><div class="rr-empty">Нет данных</div>';
+  if(!rows.length) return '<div class="rr-title">'+title+'</div><div class="rr-empty">No data</div>';
   const counts={};
   for(const d of rows){
-    const r=(d.reason||'').trim() || '(без причины)';
+    const r=(d.reason||'').trim() || '(no reason)';
     counts[r]=(counts[r]||0)+1;
   }
   const arr=Object.keys(counts).map(k=>[k,counts[k]]).sort((a,b)=>b[1]-a[1]);
   const n=rows.length;
-  let html='<div class="rr-title">'+title+' · причины</div>';
+  let html='<div class="rr-title">'+title+' · reasons</div>';
   for(const [r,c] of arr){
     html+='<div class="rr-row"><span>'+esc(r)+'</span><b>'+c+' ('+pct(c,n)+'%)</b></div>';
   }
