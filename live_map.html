@@ -90,6 +90,21 @@
   #areaReport .ar-dot.booked { background:#1e8e3e; }
   #areaReport .ar-dot.lost { background:#f9ab00; }
   #areaReport .ar-dot.canceled { background:#d93025; }
+  #areaReport .ar-pct { color:#80868b; font-weight:400; font-size:12px; margin-left:4px; }
+  #areaReport .ar-hoverable { position:relative; cursor:default; border-radius:6px; }
+  #areaReport .ar-hoverable:hover { background:#f1f3f4; }
+  #areaReport .ar-reasons {
+    display:none; position:absolute; top:100%; right:0; margin-top:4px;
+    background:#fff; border:1px solid #dadce0; border-radius:8px;
+    box-shadow:0 3px 14px rgba(0,0,0,.2); padding:8px 10px; z-index:2000;
+    width:250px; max-height:260px; overflow-y:auto;
+  }
+  #areaReport .ar-hoverable:hover .ar-reasons { display:block; }
+  #areaReport .ar-reasons .rr-title { font-size:11px; color:#80868b; margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px; }
+  #areaReport .ar-reasons .rr-row { display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-size:12.5px; }
+  #areaReport .ar-reasons .rr-row span { color:#3c4043; flex:1; }
+  #areaReport .ar-reasons .rr-row b { color:#202124; white-space:nowrap; }
+  #areaReport .ar-reasons .rr-empty { font-size:12px; color:#80868b; }
   #areaReport .ar-hint { margin-top:10px; font-size:11px; color:#80868b; line-height:1.45; }
   #setupBox { max-width:560px; background:#fff; border:1px solid #dadce0; border-radius:10px; padding:22px; box-shadow:0 2px 12px rgba(0,0,0,.12); text-align:left; }
   #setupBox h2 { margin:0 0 10px; font-size:17px; color:#202124; }
@@ -160,9 +175,15 @@
   <div class="ar-body">
     <div class="ar-row ar-total"><span>Всего работ</span><b id="arTotal">0</b></div>
     <div class="ar-row"><span><i class="ar-dot booked"></i>Booked</span><b id="arBooked">0</b></div>
-    <div class="ar-row"><span><i class="ar-dot lost"></i>Lost</span><b id="arLost">0</b></div>
-    <div class="ar-row"><span><i class="ar-dot canceled"></i>Canceled</span><b id="arCanceled">0</b></div>
-    <div class="ar-hint">Рисуйте область кнопками ◻ / ⬠ слева. «✕» очищает выделение.</div>
+    <div class="ar-row ar-hoverable" id="arLostRow">
+      <span><i class="ar-dot lost"></i>Lost</span><b id="arLost">0</b>
+      <div class="ar-reasons" id="arLostReasons"></div>
+    </div>
+    <div class="ar-row ar-hoverable" id="arCanceledRow">
+      <span><i class="ar-dot canceled"></i>Canceled</span><b id="arCanceled">0</b>
+      <div class="ar-reasons" id="arCanceledReasons"></div>
+    </div>
+    <div class="ar-hint">Рисуйте область кнопками ◻ / ⬠ слева. Наведите на Lost / Canceled — причины. «✕» очищает выделение.</div>
   </div>
 </div>
 
@@ -256,24 +277,52 @@ function ringFromLayer(layer){
   return latlngs.map(p=>[p.lat, p.lng]);
 }
 
+function pct(n, total){ return total>0 ? Math.round(n/total*100) : 0; }
+
+// build the reason-breakdown HTML for a given bucket of rows (by lose_reason)
+function reasonsHtml(rows, title){
+  if(!rows.length) return '<div class="rr-title">'+title+'</div><div class="rr-empty">Нет данных</div>';
+  const counts={};
+  for(const d of rows){
+    const r=(d.reason||'').trim() || '(без причины)';
+    counts[r]=(counts[r]||0)+1;
+  }
+  const arr=Object.keys(counts).map(k=>[k,counts[k]]).sort((a,b)=>b[1]-a[1]);
+  const n=rows.length;
+  let html='<div class="rr-title">'+title+' · причины</div>';
+  for(const [r,c] of arr){
+    html+='<div class="rr-row"><span>'+esc(r)+'</span><b>'+c+' ('+pct(c,n)+'%)</b></div>';
+  }
+  return html;
+}
+
 function refreshAreaReport(){
   const panel=document.getElementById('areaReport');
   if(!currentShape){ panel.style.display='none'; return; }
   const ring = ringFromLayer(currentShape);
-  let total=0, booked=0, lost=0, canceled=0;
+  let total=0, booked=0;
+  const lostRows=[], canceledRows=[];
   for(const d of ALL_ROWS){
     if(!passesFilters(d)) continue;              // respect current filters
     if(!pointInPoly(d.lat, d.lng, ring)) continue;
     total++;
     const s=String(d.status||'').trim().toLowerCase();
-    if(s==='lost') lost++;
-    else if(s==='canceled' || s==='cancelled') canceled++;
+    if(s==='lost') lostRows.push(d);
+    else if(s==='canceled' || s==='cancelled') canceledRows.push(d);
     else booked++;   // Booked + New + anything else = "Booked" bucket
   }
+  const lost=lostRows.length, canceled=canceledRows.length;
+
+  // numbers + percentages (of total)
   document.getElementById('arTotal').textContent = total.toLocaleString('en');
-  document.getElementById('arBooked').textContent = booked.toLocaleString('en');
-  document.getElementById('arLost').textContent = lost.toLocaleString('en');
-  document.getElementById('arCanceled').textContent = canceled.toLocaleString('en');
+  document.getElementById('arBooked').innerHTML = booked.toLocaleString('en') + ' <span class="ar-pct">'+pct(booked,total)+'%</span>';
+  document.getElementById('arLost').innerHTML = lost.toLocaleString('en') + ' <span class="ar-pct">'+pct(lost,total)+'%</span>';
+  document.getElementById('arCanceled').innerHTML = canceled.toLocaleString('en') + ' <span class="ar-pct">'+pct(canceled,total)+'%</span>';
+
+  // hover tooltips: reason breakdown within Lost / Canceled
+  document.getElementById('arLostReasons').innerHTML = reasonsHtml(lostRows, 'Lost');
+  document.getElementById('arCanceledReasons').innerHTML = reasonsHtml(canceledRows, 'Canceled');
+
   panel.style.display='block';
 }
 
